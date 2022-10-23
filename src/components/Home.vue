@@ -8,7 +8,7 @@ const detailVisible = ref(false);
 const newTaskVisible = ref(false);
 const form = reactive({
   task: "",
-  start: Date.now(),
+  start: "",
   duration: 1,
   tip: "",
 });
@@ -34,17 +34,35 @@ const handleShowDetailTask = (task) => {
 };
 
 const handleNewTaskBeforeOk = async () => {
+  if (form.task.length == 0) {
+    Message.error("必须填写任务名");
+    return;
+  } else if (form.duration < 1) {
+    Message.error("任务周期必须填写");
+    return;
+  } else if (form.start.length == 0) {
+    Message.error("必须填写任务起始日期");
+    return;
+  }
   store.addTask(form);
+  resetForm();
 };
 const handleReviewDetail = async () => {
   store.reviewTask();
 };
 
 const handleCancelDetail = () => {
+  resetForm();
   detailVisible.value = false;
 };
 const handleCancelNewTask = () => {
   newTaskVisible.value = false;
+};
+const resetForm = () => {
+  form.duration = 1;
+  form.start = "";
+  form.tip = "";
+  form.task = "";
 };
 
 // ---------------------------
@@ -84,20 +102,42 @@ const taskItemStyle = {
       ok-text="提交任务"
     >
       <a-form :model="form" @submit="handleSubmit">
-        <a-form-item field="task" label="任务">
+        <a-form-item
+          field="task"
+          label="任务"
+          :rules="[
+            { required: true, message: '任务不能为空' },
+            { minLength: 0 },
+          ]"
+          :validate-trigger="['change', 'input']"
+        >
           <a-input v-model="form.task" placeholder="输入任务名称" />
         </a-form-item>
         <a-form-item field="start_date" label="开始的日期">
           <a-date-picker v-model="form.start" />
         </a-form-item>
-        <a-form-item field="duration" label="用时">
+        <a-form-item
+          field="duration"
+          label="用时"
+          :rules="[
+            { required: true, message: '用时不能为空' },
+            { type: 'number', min: 1, message: '用时不小于1' },
+          ]"
+          :validate-trigger="['change', 'input']"
+        >
           <a-input-number
             v-model="form.duration"
             placeholder="输入需要用时多久"
           />
         </a-form-item>
         <a-form-item field="tip" label="备注">
-          <a-input v-model="form.tip" placeholder="输入备注" />
+          <a-textarea
+            v-model="form.tip"
+            placeholder="输入备注"
+            :auto-size="{
+              minRows: 3,
+            }"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -119,7 +159,8 @@ const taskItemStyle = {
             >
               <template #extra>
                 <a-button
-                  type="primary"
+                  type="dashed"
+                  status="success"
                   size="mini"
                   @click.stop="handleShowDetailTask(item)"
                   >详情</a-button
