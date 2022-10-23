@@ -17,6 +17,12 @@ const form = reactive({
 const getDelayTasks = computed(() => {
   return store.getDelayTasks;
 });
+const getTodayTasks = computed(() => {
+  return store.getTodayTasks;
+});
+const getWeekTasks = computed(() => {
+  return store.getWeekTasks;
+});
 const getDetailTask = computed(() => {
   return store.getDetailTask;
 });
@@ -176,12 +182,12 @@ const taskItemStyle = {
           <p>今天</p>
           <a-collapse accordion :bordered="false" class="task-item">
             <a-collapse-item
-              v-for="(item, index) in getDelayTasks"
+              v-for="(item, index) in getTodayTasks"
               :header="item.task"
               :key="index"
             >
-              <div>截止时间：{{ item.duration }}</div>
-              <div>延期：{{ item.tip }}</div>
+              <div>截止时间：{{ item.last_date }}</div>
+              <div>复习次数：{{ item.repetitions }}</div>
             </a-collapse-item>
           </a-collapse>
           <a-pagination :total="100" simple />
@@ -190,12 +196,12 @@ const taskItemStyle = {
           <p>本周</p>
           <a-collapse accordion :bordered="false" class="task-item">
             <a-collapse-item
-              v-for="(item, index) in getDelayTasks"
+              v-for="(item, index) in getWeekTasks"
               :header="item.task"
               :key="index"
             >
-              <div>截止时间：{{ item.duration }}</div>
-              <div>延期：{{ item.tip }}</div>
+              <div>截止时间：{{ item.last_date }}</div>
+              <div>复习次数：{{ item.repetitions }}</div>
             </a-collapse-item>
           </a-collapse>
           <a-pagination :total="100" simple />

@@ -9,7 +9,6 @@ export const useTaskStore = defineStore('tasks', {
             detailTask: {},
             delayTasks: [],
             todayTasks: [],
-            tomorrowTasks: [],
             weekTasks: [],
         }
     },
@@ -22,6 +21,9 @@ export const useTaskStore = defineStore('tasks', {
         },
         getTodayTasks() {
             return this.todayTasks;
+        },
+        getWeekTasks() {
+            return this.weekTasks;
         }
     },
     actions: {
@@ -52,7 +54,9 @@ export const useTaskStore = defineStore('tasks', {
         // 初始化task
         async fetchTask() {
             invoke("get_tasks").then((response) => {
-                this.delayTasks = response.info;
+                this.delayTasks = response.info.delay;
+                this.todayTasks= response.info.today;
+                this.weekTasks= response.info.week;
             })
 
         }

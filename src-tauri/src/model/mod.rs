@@ -1,13 +1,13 @@
-use std::sync::Mutex;
+use std::{cmp::Ordering, sync::Mutex};
 
 use crate::sm2::Item;
-use chrono::{Duration, Local};
+use chrono::{Duration, Local, TimeZone};
 use rusqlite::Connection;
 use serde::Serialize;
 use tauri::State;
 use tracing::debug;
 
-#[derive(Serialize)]
+#[derive(Serialize, Default, Clone, Debug)]
 pub struct Task {
     id: u32,
     task: String,        // 任务名称
@@ -37,11 +37,22 @@ pub struct Response<T> {
     info: Option<T>,
 }
 
-// #[tauri::command]
-// pub fn connect(connection: State<DbConnection>) {
-//     let db = Connection::open("/Users/lele/Desktop/memo.db").unwrap();
-//     *connection.db.lock().unwrap() = db;
-// }
+#[derive(Serialize, Default, Debug)]
+pub struct FetchTask {
+    delay: Vec<Task>,
+    today: Vec<Task>,
+    week: Vec<Task>,
+}
+
+impl FetchTask {
+    fn default() -> Self {
+        FetchTask {
+            delay: vec![],
+            today: vec![],
+            week: vec![],
+        }
+    }
+}
 
 impl DbConnection {
     pub fn default() -> Self {
@@ -66,8 +77,8 @@ pub fn add_task(
     connection: State<'_, DbConnection>,
 ) -> Response<String> {
     let res = connection.db.lock().unwrap().execute(
-        "insert into tasks (task, last_date, review_date, duration, tip) values(?1, ?2, ?3, ?4, ?5)",
-        (task.as_str(), "", start.as_str(), duration, tip.as_str()),
+        "insert into tasks (task, last_date, review_date, duration,repetitions, tip) values(?1, ?2, ?3, ?4, ?5, ?6)",
+        (task.as_str(), "", start.as_str(), duration, 1, tip.as_str()),
     );
 
     match res {
@@ -77,7 +88,7 @@ pub fn add_task(
 }
 
 #[tauri::command]
-pub fn get_tasks(connect: State<'_, DbConnection>) -> Response<Vec<Task>> {
+pub fn get_tasks(connect: State<'_, DbConnection>) -> Response<FetchTask> {
     let b = connect.db.lock().unwrap();
     let mut binding = b.prepare("select * from tasks").unwrap();
 
@@ -94,11 +105,42 @@ pub fn get_tasks(connect: State<'_, DbConnection>) -> Response<Vec<Task>> {
             deleted: row.get(8).unwrap(),
         })
     });
-    return wrap_response(
-        ResponseStatus::Success,
-        "success".into(),
-        Some(tks_iter.unwrap().into_iter().map(|t| t.unwrap()).collect()),
-    );
+
+    let mut fetch = FetchTask::default();
+    let now = Local::now();
+    for t in tks_iter.unwrap() {
+        let t = t.unwrap();
+
+        let task_review_date = Local
+            .datetime_from_str(
+                format!("{} 00:00:00", t.review_date).as_str(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .unwrap();
+        let date = task_review_date + Duration::days(t.duration as i64);
+        let week_date = now + Duration::days(7i64);
+
+        debug!(
+            "now: {}, task_review: {}, date: {}, week_date: {}",
+            now, task_review_date, date, week_date
+        );
+        if date.cmp(&now) == Ordering::Less {
+            fetch.delay.push(t);
+            continue;
+        }
+        if task_review_date.cmp(&now) == Ordering::Greater
+            && task_review_date.cmp(&week_date) == Ordering::Less
+        {
+            fetch.week.push(t.clone());
+        }
+        if date.cmp(&now) == Ordering::Greater && task_review_date.cmp(&now) == Ordering::Less {
+            fetch.today.push(t);
+        }
+    }
+
+    debug!("---> fetch: {:?}", fetch);
+
+    return wrap_response(ResponseStatus::Success, "success".into(), Some(fetch));
 }
 
 #[tauri::command]
@@ -157,8 +199,9 @@ mod test {
     fn test_local_date() {
         assert_eq!(
             Local
-                .datetime_from_str("2022-01-01", "%Y-%m-%d")
+                .datetime_from_str("2022-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
                 .unwrap()
+                .format("%Y-%m-%d")
                 .to_string(),
             "2022-01-01"
         );
