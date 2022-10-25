@@ -119,7 +119,11 @@ const taskItemStyle = {
         >
           <a-input v-model="form.task" placeholder="输入任务名称" />
         </a-form-item>
-        <a-form-item field="start_date" label="开始的日期">
+        <a-form-item
+          field="start_date"
+          label="开始的日期"
+          :rules="[{ required: true, message: '日期不能为空' }]"
+        >
           <a-date-picker v-model="form.start" />
         </a-form-item>
         <a-form-item

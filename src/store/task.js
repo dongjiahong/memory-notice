@@ -16,7 +16,7 @@ export const useTaskStore = defineStore('tasks', {
         getDetailTask() {
             return this.detailTask;
         },
-        getDelayTasks()  {
+        getDelayTasks() {
             return this.delayTasks;
         },
         getTodayTasks() {
@@ -24,7 +24,24 @@ export const useTaskStore = defineStore('tasks', {
         },
         getWeekTasks() {
             return this.weekTasks;
-        }
+        },
+        getTasksDigest: (state) => {
+            return (taskType) => {
+                switch (taskType) {
+                    case 'delay':
+                        return state.delayTasks;
+                        break;
+                    case 'today':
+                        return state.todayTasks;
+                        break;
+                    case 'week':
+                        return state.weekTasks;
+                        break;
+                    default:
+                        return []
+                }
+            }
+        },
     },
     actions: {
         // 任务详情
@@ -32,9 +49,8 @@ export const useTaskStore = defineStore('tasks', {
             this.detailTask = task;
         },
         // 添加一个新的task
-        async addTask(form){
-            invoke("add_task", form).then((response)=> {
-                console.log("add task: ", response)
+        async addTask(form) {
+            invoke("add_task", form).then((response) => {
                 this.fetchTask()
             });
         },
@@ -46,20 +62,18 @@ export const useTaskStore = defineStore('tasks', {
                 repetitions: this.detailTask.repetitions,
                 efactor: this.detailTask.efactor,
                 quality: 5,
-              }).then((response) => {
-                console.log("review task: ", response)
+            }).then((response) => {
                 this.fetchTask()
-              });
+            });
         },
         // 初始化task
         async fetchTask() {
             invoke("get_tasks").then((response) => {
                 this.delayTasks = response.info.delay;
-                this.todayTasks= response.info.today;
-                this.weekTasks= response.info.week;
+                this.todayTasks = response.info.today;
+                this.weekTasks = response.info.week;
             })
-
-        }
+        },
     },
 
 })
