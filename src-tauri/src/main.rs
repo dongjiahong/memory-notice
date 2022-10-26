@@ -13,6 +13,7 @@ fn main() {
     tauri::Builder::default()
         .manage(model::DbConnection::default())
         .invoke_handler(tauri::generate_handler![
+            model::get_task_by_id,
             model::add_task,
             model::get_tasks,
             model::review_task

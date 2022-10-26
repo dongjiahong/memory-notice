@@ -88,8 +88,8 @@ pub fn add_task(
 }
 
 #[tauri::command]
-pub fn get_tasks(connect: State<'_, DbConnection>) -> Response<FetchTask> {
-    let b = connect.db.lock().unwrap();
+pub fn get_tasks(connection: State<'_, DbConnection>) -> Response<FetchTask> {
+    let b = connection.db.lock().unwrap();
     let mut binding = b.prepare("select * from tasks").unwrap();
 
     let tks_iter = binding.query_map([], |row| {
@@ -141,6 +141,43 @@ pub fn get_tasks(connect: State<'_, DbConnection>) -> Response<FetchTask> {
     debug!("---> fetch: {:?}", fetch);
 
     return wrap_response(ResponseStatus::Success, "success".into(), Some(fetch));
+}
+
+#[tauri::command]
+pub fn get_task_by_id(id: u32, connection: State<'_, DbConnection>) -> Response<Task> {
+    let b = connection.db.lock().unwrap();
+    let mut binding = b.prepare("select * from tasks where id = :id;").unwrap();
+
+    let rows = binding.query_map(&[(":id", &id)], |row| {
+        Ok(Task {
+            id: row.get(0).unwrap(),
+            task: row.get(1).unwrap(),
+            last_date: row.get(2).unwrap(),
+            review_date: row.get(3).unwrap(),
+            duration: row.get(4).unwrap(),
+            repetitions: row.get(5).unwrap(),
+            efactor: row.get(6).unwrap(),
+            tip: row.get(7).unwrap(),
+            deleted: row.get(8).unwrap(),
+        })
+    });
+
+    let mut tasks = Vec::new();
+    for r in rows.unwrap() {
+        tasks.push(r.unwrap());
+    }
+
+    match tasks.len() {
+        0 => return wrap_response(ResponseStatus::Success, "success".into(), None),
+        1 => {
+            return wrap_response(
+                ResponseStatus::Success,
+                "success".into(),
+                Some(tasks[0].clone()),
+            )
+        }
+        _ => return wrap_response(ResponseStatus::Failed, "check the id".into(), None),
+    }
 }
 
 #[tauri::command]

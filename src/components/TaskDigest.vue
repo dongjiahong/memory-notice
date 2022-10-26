@@ -10,16 +10,24 @@ const getList = computed(() => {
   return store.getTasksDigest(route.params.task_type);
 });
 
+const handlerTaskDetail = (id) => {
+  store.getTaskById(Number(id));
+};
+
 onMounted(() => {
   store.fetchTask();
 });
 </script>
 
 <template>
-  <div v-for="item in getList" :key="item.id">
-    <router-link :to="{ name: 'task_detail', params: { id: item.id } }">
-      <div class="digest">{{ item.task }}</div>
-    </router-link>
+  <div
+    v-for="item in getList"
+    :key="item.id"
+    @click="handlerTaskDetail(item.id)"
+  >
+    <!-- <router-link :to="{ name: 'task_detail', params: { id: item.id } }"> -->
+    <div class="digest">{{ item.task }}</div>
+    <!-- </router-link> -->
   </div>
 </template>
 

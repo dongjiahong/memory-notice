@@ -1,16 +1,18 @@
 <script setup>
 import { useRoute } from "vue-router";
-import { ref, watch } from "vue";
+import { computed } from "vue";
 import { useTaskStore } from "../store/task";
 
 const store = useTaskStore();
 
 const route = useRoute();
-const taskData = ref();
+const taskDetail = computed(() => {
+  return store.getDetailTask;
+});
 </script>
 
 <template>
-  <div class="detail">{{ $route.params.id }}</div>
+  <div class="detail">{{ taskDetail }}</div>
 </template>
 
 <style lang="scss" scoped>
