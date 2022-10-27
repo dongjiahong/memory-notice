@@ -1,36 +1,38 @@
-use rusqlite::{Connection, Result};
+use sqlx::sqlite::SqlitePoolOptions;
 
-#[derive(Debug)]
-struct Tasks {
-    id: u32,
-    task: String,
-    start_date: String,
-    duration: u32,
-    tip: String,
+#[derive(sqlx::FromRow, Debug)]
+struct Task {
+    id: i64,
+    task: String,        // 任务名称
+    last_date: String,   // 上次任务开始的时间
+    review_date: String, // 下次review的时间
+    duration: i64,       // 任务需要用时
+    repetitions: i64,    // 复习次数
+    efactor: f64,        // 影响因子
+    tip: String,         // 备注
+    deleted: i64,        // 默认为0，如果删除就填入时间戳
 }
 
-fn main() -> Result<()> {
-    let db = Connection::open("/Users/lele/Desktop/memo.db")?;
+#[tokio::main]
+async fn main() -> Result<(), bool> {
+    let pool = SqlitePoolOptions::new()
+        .connect("sqlite:///Users/lele/Desktop/memo.db")
+        .await
+        .unwrap();
 
-    db.execute(
-        "insert into tasks (task, start_date, duration, tip) values(?1, ?2, ?3, ?4)",
-        ("任务222", "2022-10-17", 2, ""),
-    )?;
+    // Task 必须实现FromRow trait
+    let stream = sqlx::query_as::<_, Task>("select * from tasks where deleted = ?")
+        .bind(0)
+        .fetch_all(&pool)
+        .await;
 
-    let mut tks = db.prepare("select * from tasks")?;
-    let tasks_iter = tks.query_map([], |row| {
-        Ok(Tasks {
-            id: row.get(0)?,
-            task: row.get(1)?,
-            start_date: row.get(2)?,
-            duration: row.get(3)?,
-            tip: row.get(4)?,
-        })
-    })?;
+    println!("tasK: {:?}", stream);
 
-    for t in tasks_iter {
-        println!("task: {:?}", t.unwrap());
-    }
+    // query_as! 没有trait要求，但是要求有DATABASE_RUL env
+    let res = sqlx::query_as!(Task, "select * from tasks where deleted = ?", 0u32)
+        .fetch_all(&pool)
+        .await;
 
+    println!("tasK: {:?}", res);
     Ok(())
 }

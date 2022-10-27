@@ -1,27 +1,27 @@
-use std::{cmp::Ordering, sync::Mutex};
+use std::{cmp::Ordering};
 
 use crate::sm2::Item;
 use chrono::{Duration, Local, TimeZone};
-use rusqlite::Connection;
 use serde::Serialize;
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use tauri::State;
 use tracing::debug;
 
 #[derive(Serialize, Default, Clone, Debug)]
 pub struct Task {
-    id: u32,
+    id: i64,
     task: String,        // 任务名称
     last_date: String,   // 上次任务开始的时间
     review_date: String, // 下次review的时间
-    duration: u32,       // 任务需要用时
-    repetitions: u32,    // 复习次数
+    duration: i64,       // 任务需要用时
+    repetitions: i64,    // 复习次数
     efactor: f64,        // 影响因子
     tip: String,         // 备注
-    deleted: u32,        // 默认为0，如果删除就填入时间戳
+    deleted: i64,        // 默认为0，如果删除就填入时间戳
 }
 
 pub struct DbConnection {
-    db: Mutex<Connection>,
+    db:Pool<Sqlite>,
 }
 
 #[derive(Serialize)]
@@ -55,31 +55,35 @@ impl FetchTask {
 }
 
 impl DbConnection {
-    pub fn default() -> Self {
+    pub async fn default() -> Self {
         let db_file = "/Users/lele/Desktop/memo.db";
         debug!("open sqlite db file: {}", db_file);
-        let db = Connection::open(db_file).unwrap();
+        let db = SqlitePoolOptions::new()
+            .connect(format!("sqlite://{}", db_file).as_str())
+            .await
+            .unwrap();
 
-        return DbConnection { db: Mutex::new(db) };
+        return DbConnection {db};
     }
 }
 
-fn wrap_response<T>(status: ResponseStatus, msg: String, info: Option<T>) -> Response<T> {
-    return Response { status, msg, info };
+fn wrap_response<T>(status: ResponseStatus, msg: String, info: Option<T>) -> Result<Response<T>,()> {
+    return Ok(Response { status, msg, info });
 }
 
 #[tauri::command]
-pub fn add_task(
+pub async fn add_task(
     task: String,
     start: String,
     duration: u32,
     tip: String,
     connection: State<'_, DbConnection>,
-) -> Response<String> {
-    let res = connection.db.lock().unwrap().execute(
-        "insert into tasks (task, last_date, review_date, duration,repetitions, tip) values(?1, ?2, ?3, ?4, ?5, ?6)",
-        (task.as_str(), "", start.as_str(), duration, 1, tip.as_str()),
-    );
+) -> Result<Response<String>,()> {
+    let res = sqlx::query!(
+        "insert into tasks (task, last_date, review_date, duration, repetitions, tip) values(?, ?, ?, ?, ?, ?)",
+        task, "", start, duration, 1, tip)
+        .execute(&connection.db)
+        .await;
 
     match res {
         Ok(_) => wrap_response(ResponseStatus::Success, "success".into(), None),
@@ -88,29 +92,15 @@ pub fn add_task(
 }
 
 #[tauri::command]
-pub fn get_tasks(connection: State<'_, DbConnection>) -> Response<FetchTask> {
-    let b = connection.db.lock().unwrap();
-    let mut binding = b.prepare("select * from tasks").unwrap();
-
-    let tks_iter = binding.query_map([], |row| {
-        Ok(Task {
-            id: row.get(0).unwrap(),
-            task: row.get(1).unwrap(),
-            last_date: row.get(2).unwrap(),
-            review_date: row.get(3).unwrap(),
-            duration: row.get(4).unwrap(),
-            repetitions: row.get(5).unwrap(),
-            efactor: row.get(6).unwrap(),
-            tip: row.get(7).unwrap(),
-            deleted: row.get(8).unwrap(),
-        })
-    });
+pub async fn get_tasks(connection: State<'_, DbConnection>) -> Result<Response<FetchTask>,()> {
+    let tasks = sqlx::query_as!(Task, "select * from tasks")
+        .fetch_all(&connection.db)
+        .await
+        .unwrap();
 
     let mut fetch = FetchTask::default();
     let now = Local::now();
-    for t in tks_iter.unwrap() {
-        let t = t.unwrap();
-
+    for t in tasks {
         let task_review_date = Local
             .datetime_from_str(
                 format!("{} 00:00:00", t.review_date).as_str(),
@@ -144,43 +134,23 @@ pub fn get_tasks(connection: State<'_, DbConnection>) -> Response<FetchTask> {
 }
 
 #[tauri::command]
-pub fn get_task_by_id(id: u32, connection: State<'_, DbConnection>) -> Response<Task> {
-    let b = connection.db.lock().unwrap();
-    let mut binding = b.prepare("select * from tasks where id = :id;").unwrap();
+pub async fn get_task_by_id(id: u32, connection: State<'_, DbConnection>) -> Result<Response<Task>, ()> {
+    let task = sqlx::query_as!(Task, "select * from tasks where id = ?", id)
+        .fetch_optional(&connection.db)
+        .await;
 
-    let rows = binding.query_map(&[(":id", &id)], |row| {
-        Ok(Task {
-            id: row.get(0).unwrap(),
-            task: row.get(1).unwrap(),
-            last_date: row.get(2).unwrap(),
-            review_date: row.get(3).unwrap(),
-            duration: row.get(4).unwrap(),
-            repetitions: row.get(5).unwrap(),
-            efactor: row.get(6).unwrap(),
-            tip: row.get(7).unwrap(),
-            deleted: row.get(8).unwrap(),
-        })
-    });
-
-    let mut tasks = Vec::new();
-    for r in rows.unwrap() {
-        tasks.push(r.unwrap());
-    }
-
-    match tasks.len() {
-        0 => return wrap_response(ResponseStatus::Success, "success".into(), None),
-        1 => {
+    match task.unwrap() {
+        Some(t) => {
             return wrap_response(
                 ResponseStatus::Success,
                 "success".into(),
-                Some(tasks[0].clone()),
-            )
+                Some(t),
+            );
         }
-        _ => return wrap_response(ResponseStatus::Failed, "check the id".into(), None),
+        None => return wrap_response(ResponseStatus::Success, "success".into(), None)
     }
 }
 
-#[tauri::command]
 /*
    参数：quatily:
            2: 记不起来
@@ -189,14 +159,15 @@ pub fn get_task_by_id(id: u32, connection: State<'_, DbConnection>) -> Response<
            5: 没问题
    返回: 下次复习的时间
 */
-pub fn review_task(
+#[tauri::command]
+pub async fn review_task(
     id: u32,
     last: String,
     repetitions: usize,
     efactor: f64,
     quality: u8,
     connection: State<'_, DbConnection>,
-) -> Response<String> {
+) -> Result<Response<String>,()> {
     // 1. 获取当前日期
     let now = Local::now();
     // 2. 获取下次复习日期
@@ -210,16 +181,14 @@ pub fn review_task(
         id, last, repetitions, efactor, quality
     );
 
-    let res = connection.db.lock().unwrap().execute(
-        "update tasks set last_date = ?1, review_date = ?2, repetitions = ?3, efactor = ?4 where id = ?5",
-        (
-            last,
-            review_date.format("%Y-%m-%d").to_string(),
-            new_item.repetitions(),
-            new_item.efactor(),
-            id,
-        ),
-    );
+    let review_date_str = review_date.format("%Y-%m-%d").to_string();
+    let new_item_repetition = new_item.repetitions() as i64;
+    let new_item_efactor = new_item.efactor();
+    let res = sqlx::query_as!(Task, 
+        "update tasks set last_date = ?, review_date = ?, repetitions = ?, efactor = ? where id = ?",
+            last, review_date_str, new_item_repetition, new_item_efactor, id)
+            .execute(&connection.db)
+            .await;
 
     match res {
         Ok(_) => wrap_response(ResponseStatus::Success, "success".into(), None),

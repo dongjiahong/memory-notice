@@ -7,11 +7,12 @@ pub mod model;
 pub mod sm2;
 pub mod utils;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     utils::init_tracing();
 
     tauri::Builder::default()
-        .manage(model::DbConnection::default())
+        .manage(model::DbConnection::default().await)
         .invoke_handler(tauri::generate_handler![
             model::get_task_by_id,
             model::add_task,

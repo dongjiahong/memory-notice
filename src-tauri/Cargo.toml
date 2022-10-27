@@ -18,10 +18,11 @@ tauri-build = { version = "1.1.1", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.1.1", features = ["api-all"] }
-rusqlite = "0.28.0"
 tracing = "0.1.37"
 tracing-subscriber = {version = "0.3.16", features = ["env-filter", "local-time"] }
 chrono = "0.4.22"
+sqlx = { version = "0.6.2", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
+tokio = { version = "1.21.2", features = ["full"] }
 
 
 [features]
@@ -33,4 +34,5 @@ default = [ "custom-protocol" ]
 custom-protocol = [ "tauri/custom-protocol" ]
 
 [dev-dependencies]
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+sqlx = { version = "0.6.2", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
+tokio = { version = "1.21.2", features = ["full"] }
